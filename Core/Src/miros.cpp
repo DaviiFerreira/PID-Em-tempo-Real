@@ -125,6 +125,7 @@ void osAperiodicWrapper() {
 		OSAperiodicTasks[0]->myTask();
 		for(uint8_t i =0; i<OS_AperiodicTaskNum-1; i++){
 			OSAperiodicTasks[i] = OSAperiodicTasks[i+1];
+			 OSAperiodicTasks[i+1] = 0x0;
 		}
 		OS_AperiodicTaskNum--;
 }

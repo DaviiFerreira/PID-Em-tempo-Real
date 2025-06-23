@@ -189,11 +189,11 @@ void EXTI15_10_IRQHandler(void)
 {
 
 	// pra testar com stm
-	//HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+	HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
 
 
 	//pra testar com renode
-	 uint8_t raw = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
+	 /*uint8_t raw = HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13);
 	    if (raw != buttonLast) {
 	        // Mudou o estado, faz debounce
 	        HAL_Delay(5);  // ou use um contador simples, isso é só exemplo rápido
@@ -207,7 +207,7 @@ void EXTI15_10_IRQHandler(void)
   HAL_GPIO_EXTI_Callback(GPIO_PIN_13);
 	    }
 	            }
-	        }
+	        }*/
 }
 
 

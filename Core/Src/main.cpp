@@ -22,10 +22,14 @@ extern "C" {
 #include "stm32g4xx_hal.h"
 #include "stm32g4xx_hal_rcc.h"
 #include "semaforo.h"
+
+#include "qassert.h"
 #include "stm32g4xx_hal.h"  // Biblioteca da HAL para STM32G4
 #include "stm32g4xx_hal_rng.h"  // Biblioteca específica do RNG
 }
-
+#include "sensor.h"
+#include "stm32g4xx_hal_conf.h"
+#include "ventilador.h"
 /*teste botao*/
 volatile int but = 0;  // variável global que será modificada na interrupção
 
@@ -210,9 +214,28 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	  rtos :: OSAperiodicTask_start(&d, &taskD);
   }
 }
+
+
+
+// Main
+/*int main(void) {
+    HAL_Init();
+    rtos :: OS_onStartup() ;// Configure o clock do sistema
+    I2C1_Manual_Init();    // Inicializa o I2C1 com PA15/PB7
+
+    while (1) {
+        uint16_t distance = VL53L0X_ReadDistance();
+        HAL_Delay(100);    // Espera 100ms entre medições
+    }
+}*/
 int main(void)
 {
 	 HAL_Init();
+	// SystemClock_Config();
+	    sensorInit();          // Inicializa I2C
+
+	    uint16_t distance;
+	    HAL_StatusTypeDef status;
 
 	  __HAL_RCC_GPIOC_CLK_ENABLE(); // Clock para PC13 (botão)
 	  __HAL_RCC_SYSCFG_CLK_ENABLE();
@@ -229,6 +252,15 @@ int main(void)
 	  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 	 avG_Init();
+
+	 status = sensorReadDistance(&hi2c1, &distance);
+
+	        if (status == HAL_OK) {
+	            // Usa o valor da distância
+	            // Ex: enviar por UART, acionar algo, etc.
+	        } else {
+	            // Tratar erro
+	        }
 	  rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
 
 

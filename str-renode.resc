@@ -29,4 +29,7 @@ macro reset
     cpu0 VectorTableOffset 0x8000000
 """
 
+
+
+
 runMacro $reset
