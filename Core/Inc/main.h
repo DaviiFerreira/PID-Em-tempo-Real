@@ -3,8 +3,10 @@
 
 #include "stm32g4xx_hal.h"
 
+/* Exported functions prototypes ---------------------------------------------*/
+void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
-#define RCC_OSC32_IN_Pin GPIO_PIN_14
+/*#define RCC_OSC32_IN_Pin GPIO_PIN_14
 #define RCC_OSC32_IN_GPIO_Port GPIOC
 #define RCC_OSC32_OUT_Pin GPIO_PIN_15
 #define RCC_OSC32_OUT_GPIO_Port GPIOC
@@ -17,6 +19,6 @@
 #define T_SWCLK_Pin GPIO_PIN_14
 #define T_SWCLK_GPIO_Port GPIOA
 #define T_SWO_Pin GPIO_PIN_3
-#define T_SWO_GPIO_Port GPIOB
+#define T_SWO_GPIO_Port GPIOB*/
 
 #endif /* __MAIN_H */

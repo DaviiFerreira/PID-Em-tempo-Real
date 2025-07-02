@@ -27,16 +27,26 @@ extern "C" {
 #include "stm32g4xx_hal.h"  // Biblioteca da HAL para STM32G4
 #include "stm32g4xx_hal_rng.h"  // Biblioteca específica do RNG
 }
-#include "sensor.h"
+//#include "sensor.h"
 #include "stm32g4xx_hal_conf.h"
 #include "ventilador.h"
 /*teste botao*/
+
+
+I2C_HandleTypeDef hi2c1;
+//I2C_HandleTypeDef hi2c2;
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_I2C1_Init(void);
 volatile int but = 0;  // variável global que será modificada na interrupção
+
+// Endereço do VL53L0X
 
 #include "miros.h"
 int32_t a = 0;
 int32_t pilha[5] = {-1, -1, -1, -1, -1};
 int32_t topo = -1;
+int32_t E = -1;
 rtos :: MySemaphore mutex;
 RNG_HandleTypeDef hrng;  // Definição da variável global
 
@@ -54,190 +64,293 @@ void avG_Init() {
     HAL_RNG_Init(&hrng);
 }
 
-uint32_t get_random_number() {
-    uint32_t random_value;
-    HAL_RNG_GenerateRandomNumber(&hrng, &random_value);
-    return ((random_value % 94) + 33); // Caracteres de 33 a 126
+
+
+double ultimoErro = 0;
+
+double erroIntegral=0;
+double testePid(double medida, double setpoint) {
+    double erro =   setpoint - medida;
+
+    double proporcional = -0.0001 * erro;
+    erroIntegral += erro * 0.050;
+    double integral = -0.00001 * erroIntegral;
+    double derivativo = -0.00001 * (erro - ultimoErro) / 0.050;
+
+    ultimoErro = erro;
+    if( proporcional + integral + derivativo<-0.3){
+    	return -30;
+    }
+    if( proporcional + integral + derivativo>0.3){
+    	return 30;
+    }
+
+    return (proporcional + integral + derivativo)*100;
 }
-/*
-	bool push(){
-		if(mutex.tryLock()){
-			if(topo<4){
-				topo++;
-				pilha[topo] = get_random_number();
-				mutex.tryUnlock();
-				return true;
-			}
-			mutex.tryUnlock();
-		}
-		return false;
-
-	}
-	int32_t pop(){
-			if(mutex.tryLock()){
-				if(topo>=0){
-					uint32_t value = pilha[topo];
-					pilha[topo] = -1; // Limpando valor retirado
-
-					topo--;
-					mutex.tryUnlock();
-					return value;
-				}
-				mutex.tryUnlock();
-			}
-			return -1;
-
-		}
-*/
-
-
-uint32_t stack_idleThread[40];
-uint32_t stack_ProducerThread[50];
-uint32_t stack_ConsumerThread[50];
-
-uint32_t stack_TaskCThread[50];
-
-void inProduce(){
-	a=2;
-	return;
-	}
-void outProduce(){
-	a=4;
-	return;
-	}
-void inConsume(){
-	a=3;
-	return;
-	}
-void outConsume(){
-	a=5;
-	return;
-	}
-void inTc(){
-	a=10;
-	return;
-	}
-void outTc(){
-	a=20;
-	return;
-	}
-void produce(){
- 		inProduce();
-	//push();
- 		for(uint16_t i = 0; i<10; i++){}
-
-	outProduce();
-
-	}
-void taskC(){
-	inTc();
-	for(uint16_t i = 0; i<30; i++){}
-	outTc();
-
-}
-
-void consume(){
-	/*
-	 * Se sizePass fosse declarado dentro da função sem static, sim, ele reiniciaria para 0 toda vez que consume() fosse chamado.
-
-Mas quando a variável é static dentro da função, ela mantém seu valor entre chamadas! Ou seja:
-
-Na primeira chamada, sizePass = 0.
-
-Na segunda chamada, ele continua com o valor que estava na última execução.
-
-Ele só é reinicializado se o microcontrolador for reiniciado.*/
-
-
-
-/*	static char password[64];
-	static uint32_t sizePass = 0;
-	int32_t retorno = pop();
-
-
-
-	 * Em microcontroladores ARM Cortex-M (como o STM32), operações em variáveis de 32 bits
-	 * são atômicas se alinhadas corretamente (o compilador cuida disso).
-
-Ou seja, uma escrita ou leitura em sizePass não pode ser interrompida pela preempção.*/
-
-
-	/*if(sizePass >= 64 ){
-			(void) password; // Apenas para evitar o warning
-			sizePass = 0;
-
-		}
-	if(retorno != -1 && sizePass<64){
-		password[sizePass]= static_cast<char>(retorno);
-		sizePass++;
-
-	}*/
-	inConsume();
-		for(uint16_t i = 0; i<20; i++){}
-	outConsume();
-
-
-}
-rtos::OSPeriodicTask PeriodicA;
-rtos::OSPeriodicTask PeriodicB;
-rtos::OSPeriodicTask PeriodicC;
-
-
-
-uint8_t D = 0;
-void inTd(){
-D=1;
-}
-void taskD(){
-inTd();
-D=3;
-}
-uint8_t E = 0;
-void inTe(){
-E=1;
-}
-void taskE(){
-inTe();
-E=3;
-}
-rtos :: OSAperiodicTask e;
-rtos :: OSAperiodicTask d;
-
-uint8_t ABC = 0;
-
-
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+void Error_Handler(void)
 {
-  if (GPIO_Pin == GPIO_PIN_13)
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
   {
-	  rtos :: OSAperiodicTask_start(&d, &taskD);
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+
+
+
+#define VL53L0X_ADDR  (0x52) // 7-bit left-shifted
+HAL_StatusTypeDef VL53L0X_InitSimple(void) {
+    uint8_t cmd = 0x01;
+    HAL_StatusTypeDef ret;
+      uint8_t ready;
+    // 1) Iniciar medição única (escreve 0x01 em 0x00)
+    ret = HAL_I2C_Mem_Write(&hi2c1, VL53L0X_ADDR, 0x00, I2C_MEMADD_SIZE_8BIT, &cmd, 1, 100);
+    if (ret != HAL_OK) return ret;
+
+    do {
+           ret = HAL_I2C_Mem_Read(&hi2c1, VL53L0X_ADDR, 0xC0, I2C_MEMADD_SIZE_8BIT, &ready, 1, 100);
+
+       } while ((ready != 0xEE));
+    return ret;
+
+}
+
+HAL_StatusTypeDef VL53L0X_ReadSingleSimple(uint16_t *distance) {
+    HAL_StatusTypeDef ret;
+    uint8_t cmd = 0x01;
+    uint8_t  rangeData[2];
+
+      uint8_t ready;
+
+    ret = HAL_I2C_Mem_Write(&hi2c1, VL53L0X_ADDR, 0x00, I2C_MEMADD_SIZE_8BIT, &cmd, 1, 100);
+    do {
+            ret = HAL_I2C_Mem_Read(&hi2c1, VL53L0X_ADDR, 0xC0, I2C_MEMADD_SIZE_8BIT, &ready, 1, 100);
+
+        } while ((ready != 0xEE));
+
+    // 3) Ler distância: 0x1E + 0x1F,,
+    ret = HAL_I2C_Mem_Read(&hi2c1, VL53L0X_ADDR, 0x1E, I2C_MEMADD_SIZE_8BIT, rangeData, 2, 100);
+
+    *distance = (rangeData[0] << 8) | rangeData[1];
+    return ret;
+}
+
+static void MX_GPIO_Init(void)
+{
+	  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	    /* --- Habilita clocks GPIOA e GPIOB --- */
+	    __HAL_RCC_GPIOA_CLK_ENABLE();
+	    __HAL_RCC_GPIOB_CLK_ENABLE();
+
+	    /* PB7 -> SDA (I2C1_SDA) */
+	    GPIO_InitStruct.Pin       = GPIO_PIN_7;
+	    GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;
+	    GPIO_InitStruct.Pull      = GPIO_PULLUP;
+	    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
+	    GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+	    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+	    /* PA15 -> SCL (I2C1_SCL) */
+	    GPIO_InitStruct.Pin       = GPIO_PIN_15;
+	    /* Mode, Pull, Speed e Alternate permanecem iguais */
+	    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOF_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
+}
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+    __HAL_RCC_I2C1_CLK_ENABLE();
+
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.Timing = 0x10C0ECFF;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /** Configure the main internal regulator output voltage
+  */
+  HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
+
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    Error_Handler();
   }
 }
 
+uint16_t setpointGlobal = 0;
+double resultPid;
+    uint16_t distance = 0;
+void consume()
+	{
+E=7;
+ // VL53L0X_ReadSingleSimple( &distance);
 
 
-// Main
-/*int main(void) {
-    HAL_Init();
-    rtos :: OS_onStartup() ;// Configure o clock do sistema
-    I2C1_Manual_Init();    // Inicializa o I2C1 com PA15/PB7
+}
+void produce()
+	{
+E = 6;
+	//ventiladorSetDutyCycle(resultPid);
+	// Usa o valor da distância
+	// Ex: enviar por UART, acionar algo, etc.
 
-    while (1) {
-        uint16_t distance = VL53L0X_ReadDistance();
-        HAL_Delay(100);    // Espera 100ms entre medições
-    }
-}*/
+}
+void produceA()
+	{
+
+    uint16_t medida = distance - 50; // 50 correção leitura do sensor
+	double erro =   setpointGlobal - medida;
+
+	    double proporcional = -0.0001 * erro;
+	    erroIntegral += erro * 0.050;
+	    double integral = -0.00001 * erroIntegral;
+	    double derivativo = -0.00001 * (erro - ultimoErro) / 0.050;
+
+	    ultimoErro = erro;
+	    if( proporcional + integral + derivativo<-0.3){
+	    	resultPid = -30;
+	    return;
+	    }
+	    if( proporcional + integral + derivativo>0.3){
+	    	resultPid =30;
+	    	return;
+	    }
+
+	    resultPid = (proporcional + integral + derivativo)*100;
+	//resultPid = testePid(distance-50,setpointGlobal)+61;
+
+}
+
+
+/*	if (status == HAL_OK) {
+						E=5;
+						ventiladorSetDutyCycle(testePid(distance-50,setpointGlobal)+61 );
+						HAL_Delay(50);
+						// Usa o valor da distância
+						// Ex: enviar por UART, acionar algo, etc.
+					} else {
+						E=6;
+						// Tratar erro
+
+
+	  }
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ * */
+
+
+
+
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	setpointGlobal = 200;
+}
+
+#define VL53L0X_TIMEOUT_MS   1000
+
+
+uint32_t stack_idleThread[40];
+uint32_t stack_ConsumerThread[128];
+uint32_t stack_ProducerThread[128];
+uint32_t stack_ProducerAThread[400];
+
+rtos :: OSPeriodicTask threadConsumer;
+rtos :: OSPeriodicTask threadProducer;
+rtos :: OSPeriodicTask threadProducerA;
+#include "core_cm4.h"   // traz as definições de SCB e FPU
+
 int main(void)
 {
-	 HAL_Init();
-	// SystemClock_Config();
-	    sensorInit();          // Inicializa I2C
+	setpointGlobal = 300;
+	SCB->CPACR |= (0xF << 20);          // habilita acesso FPU
 
-	    uint16_t distance;
-	    HAL_StatusTypeDef status;
+	// no começo do main(), logo após habilitar CPACR:
+	FPU->FPCCR &= ~((1U << 30) | (1U << 31));  // desliga ASPEN e LSPEN
 
-	  __HAL_RCC_GPIOC_CLK_ENABLE(); // Clock para PC13 (botão)
+	  HAL_Init();
+	    SystemClock_Config();
+	    MX_GPIO_Init();
+	    MX_I2C1_Init();
+
+
+ // Clock para PC13 (botão)
 	  __HAL_RCC_SYSCFG_CLK_ENABLE();
 
 	  // Inicialização do botão PC13 como EXTI
@@ -253,33 +366,27 @@ int main(void)
 
 	 avG_Init();
 
-	 status = sensorReadDistance(&hi2c1, &distance);
+	// rtos :: OS_onStartup();
+	  ventiladorInit();
+	  ventiladorSetDutyCycle(80.00);
 
-	        if (status == HAL_OK) {
-	            // Usa o valor da distância
-	            // Ex: enviar por UART, acionar algo, etc.
-	        } else {
-	            // Tratar erro
-	        }
-	  rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
+ VL53L0X_InitSimple();
 
 
-	  rtos::OSPeriodicTask_start(&PeriodicA,
-	                 &produce,
-					 stack_ProducerThread, sizeof(stack_ProducerThread),200u);
+		  rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
 
-	  rtos:: OSPeriodicTask_start(&PeriodicB,
-	                 &consume,
-					 stack_ConsumerThread, sizeof(stack_ConsumerThread),400u);
+		  rtos::OSPeriodicTask_start(&threadConsumer,
+			                 &consume,
+							 stack_ConsumerThread, sizeof(stack_ConsumerThread),50u);
 
+		  rtos::OSPeriodicTask_start(&threadProducer,
+		                 &produce,
+						 stack_ProducerThread, sizeof(stack_ProducerThread),50u);
 
-	  /*rtos:: OSPeriodicTask_start(&PeriodicC,
-	                 &taskC,
-					 stack_TaskCThread, sizeof(stack_TaskCThread),750u);*/
-	  rtos :: AperiodicServerStart();
-
-	  /* transfer control to the RTOS to run the threads */
-	  rtos::OS_run();
+		  rtos::OSPeriodicTask_start(&threadProducerA,
+		                 &produceA,
+						 stack_ProducerAThread, sizeof(stack_ProducerAThread),50u);
+		  rtos::OS_run();
 }
 
 

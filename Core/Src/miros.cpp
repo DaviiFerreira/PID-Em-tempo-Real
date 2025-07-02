@@ -455,6 +455,9 @@ void Q_onAssert(char const *module, int loc) {
 }
 
 /***********************************************/
+
+/*
+*/
 __attribute__ ((naked, optimize("-fno-stack-protector")))
 void PendSV_Handler(void) {
 
