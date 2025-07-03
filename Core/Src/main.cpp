@@ -30,45 +30,37 @@ extern "C" {
 //#include "sensor.h"
 #include "stm32g4xx_hal_conf.h"
 #include "ventilador.h"
+#include "core_cm4.h"   // traz as definições de SCB e FPU
+#include "miros.h"
 /*teste botao*/
 
+#define VL53L0X_ADDR  (0x52) // 7-bit left-shifted
 
 I2C_HandleTypeDef hi2c1;
-//I2C_HandleTypeDef hi2c2;
+
+
+rtos :: MySemaphore mutex;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
-volatile int but = 0;  // variável global que será modificada na interrupção
+#define VL53L0X_TIMEOUT_MS   1000
 
+
+uint32_t stack_idleThread[40];
+uint32_t stack_LerSensor[128];
+uint32_t stack_CalculoPid[128];
+uint32_t stack_SetaVelocidade[400];
+
+rtos :: OSPeriodicTask threadLerSensor;
+rtos :: OSPeriodicTask threadCalculoPid;
+rtos :: OSPeriodicTask threadSetaVelocidade;
 // Endereço do VL53L0X
 
-#include "miros.h"
-int32_t a = 0;
-int32_t pilha[5] = {-1, -1, -1, -1, -1};
-int32_t topo = -1;
 int32_t E = -1;
-rtos :: MySemaphore mutex;
-RNG_HandleTypeDef hrng;  // Definição da variável global
-
-void RNG_Init() {
-    __HAL_RCC_RNG_CLK_ENABLE(); // Liga o clock do RNG
-    hrng.Instance = RNG;
-    HAL_RNG_Init(&hrng);
-}
-
-
-
-void avG_Init() {
-    __HAL_RCC_RNG_CLK_ENABLE(); // Liga o clock do RNG
-    hrng.Instance = RNG;
-    HAL_RNG_Init(&hrng);
-}
-
-
-
 double ultimoErro = 0;
-
 double erroIntegral=0;
+
+
 double testePid(double medida, double setpoint) {
     double erro =   setpoint - medida;
 
@@ -89,18 +81,14 @@ double testePid(double medida, double setpoint) {
 }
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
+ __disable_irq();
   while (1)
   {
   }
-  /* USER CODE END Error_Handler_Debug */
 }
 
 
 
-#define VL53L0X_ADDR  (0x52) // 7-bit left-shifted
 HAL_StatusTypeDef VL53L0X_InitSimple(void) {
     uint8_t cmd = 0x01;
     HAL_StatusTypeDef ret;
@@ -157,8 +145,6 @@ static void MX_GPIO_Init(void)
 	    GPIO_InitStruct.Pin       = GPIO_PIN_15;
 	    /* Mode, Pull, Speed e Alternate permanecem iguais */
 	    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOF_CLK_ENABLE();
@@ -166,19 +152,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
 }
 static void MX_I2C1_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
     __HAL_RCC_I2C1_CLK_ENABLE();
 
   hi2c1.Instance = I2C1;
@@ -208,9 +185,6 @@ static void MX_I2C1_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
 
 }
 void SystemClock_Config(void)
@@ -252,22 +226,23 @@ void SystemClock_Config(void)
 uint16_t setpointGlobal = 0;
 double resultPid;
     uint16_t distance = 0;
-void consume()
+void LerSensor()
 	{
-E=7;
+E=distance;
  // VL53L0X_ReadSingleSimple( &distance);
 
 
 }
-void produce()
+void SetaVelocidade()
 	{
-E = 6;
-	//ventiladorSetDutyCycle(resultPid);
+float e = distance/100;
+//distance = 6.00;
+	ventiladorSetDutyCycle(resultPid + 61);
 	// Usa o valor da distância
 	// Ex: enviar por UART, acionar algo, etc.
 
 }
-void produceA()
+void CalculoPid()
 	{
 
     uint16_t medida = distance - 50; // 50 correção leitura do sensor
@@ -294,28 +269,6 @@ void produceA()
 }
 
 
-/*	if (status == HAL_OK) {
-						E=5;
-						ventiladorSetDutyCycle(testePid(distance-50,setpointGlobal)+61 );
-						HAL_Delay(50);
-						// Usa o valor da distância
-						// Ex: enviar por UART, acionar algo, etc.
-					} else {
-						E=6;
-						// Tratar erro
-
-
-	  }
- *
- *
- *
- *
- *
- *
- *
- * */
-
-
 
 
 
@@ -323,18 +276,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	setpointGlobal = 200;
 }
 
-#define VL53L0X_TIMEOUT_MS   1000
 
-
-uint32_t stack_idleThread[40];
-uint32_t stack_ConsumerThread[128];
-uint32_t stack_ProducerThread[128];
-uint32_t stack_ProducerAThread[400];
-
-rtos :: OSPeriodicTask threadConsumer;
-rtos :: OSPeriodicTask threadProducer;
-rtos :: OSPeriodicTask threadProducerA;
-#include "core_cm4.h"   // traz as definições de SCB e FPU
 
 int main(void)
 {
@@ -364,7 +306,7 @@ int main(void)
 	  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
 	  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
-	 avG_Init();
+	 //avG_Init();
 
 	// rtos :: OS_onStartup();
 	  ventiladorInit();
@@ -375,17 +317,17 @@ int main(void)
 
 		  rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
 
-		  rtos::OSPeriodicTask_start(&threadConsumer,
-			                 &consume,
-							 stack_ConsumerThread, sizeof(stack_ConsumerThread),50u);
+		  rtos::OSPeriodicTask_start(&threadLerSensor,
+			                 &LerSensor,
+							 stack_LerSensor, sizeof(stack_LerSensor),50u);
 
-		  rtos::OSPeriodicTask_start(&threadProducer,
-		                 &produce,
-						 stack_ProducerThread, sizeof(stack_ProducerThread),50u);
+		  rtos::OSPeriodicTask_start(&threadCalculoPid,
+		                 &CalculoPid,
+						 stack_CalculoPid, sizeof( stack_CalculoPid),50u);
 
-		  rtos::OSPeriodicTask_start(&threadProducerA,
-		                 &produceA,
-						 stack_ProducerAThread, sizeof(stack_ProducerAThread),50u);
+		  rtos::OSPeriodicTask_start(&threadSetaVelocidade,
+		                 &SetaVelocidade,
+						 stack_SetaVelocidade, sizeof(stack_SetaVelocidade),50u);
 		  rtos::OS_run();
 }
 
