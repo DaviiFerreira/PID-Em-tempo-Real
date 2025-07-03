@@ -35,11 +35,11 @@ extern "C"
 #include "miros.h"
 /*teste botao*/
 
+rtos :: MySemaphore mutex;
 #define VL53L0X_ADDR (0x52) // 7-bit left-shifted
 
 I2C_HandleTypeDef hi2c1;
 
-rtos ::MySemaphore mutex;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
@@ -228,47 +228,79 @@ double resultPid;
 uint16_t distance = 0;
 void LerSensor()
 {
-  E = distance;
-  // VL53L0X_ReadSingleSimple( &distance);
+  //E = distance;
+	if(mutex.tryLock()){
+
+   VL53L0X_ReadSingleSimple( &distance);
+		mutex.tryUnlock();
+	}
 }
 void SetaVelocidade()
 {
-  float e = distance / 100;
+  //float e = distance / 100;
   // distance = 6.00;
+
+	if(mutex.tryLock()){
+
   ventiladorSetDutyCycle(resultPid + 61);
+	mutex.tryUnlock();
+	}
   // Usa o valor da distância
   // Ex: enviar por UART, acionar algo, etc.
 }
 void CalculoPid()
 {
 
-  uint16_t medida = distance - 50; // 50 correção leitura do sensor
-  double erro = setpointGlobal - medida;
+ if(mutex.tryLock()){
+	  uint16_t medida = distance ; // 50 correção leitura do sensor
+	 if(distance<20){
+		 medida = 20;
+	 }
+	 if(distance>1000){
+	 		 medida = 1000;
+	 	 }
+	  double erro = setpointGlobal - medida;
 
-  double proporcional = -0.0001 * erro;
-  erroIntegral += erro * 0.050;
-  double integral = -0.00001 * erroIntegral;
-  double derivativo = -0.00001 * (erro - ultimoErro) / 0.050;
+	  double proporcional = -0.0001 * erro;
+	  erroIntegral += erro * 0.050;
+	  double integral = -0.00001 * erroIntegral;
+	  double derivativo = -0.00001 * (erro - ultimoErro) / 0.050;
 
-  ultimoErro = erro;
-  if (proporcional + integral + derivativo < -0.3)
-  {
-    resultPid = -30;
-    return;
-  }
-  if (proporcional + integral + derivativo > 0.3)
-  {
-    resultPid = 30;
-    return;
-  }
+	  ultimoErro = erro;
+	  if (proporcional + integral + derivativo < -0.3)
+	  {
+	    resultPid = -30;
 
-  resultPid = (proporcional + integral + derivativo) * 100;
+		  mutex.tryUnlock();
+	    return;
+	  }
+	  if (proporcional + integral + derivativo > 0.3)
+	  {
+	    resultPid = 30;
+
+		  mutex.tryUnlock();
+	    return;
+	  }
+
+	  resultPid = (proporcional + integral + derivativo) * 100;
+	  mutex.tryUnlock();
+ }
+
   // resultPid = testePid(distance-50,setpointGlobal)+61;
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  setpointGlobal = 200;
+	while(!mutex.tryLock()){}
+
+	if (setpointGlobal == 300){
+		  setpointGlobal = 200;
+	}
+	else{
+		setpointGlobal = 300;
+	}
+	mutex.tryUnlock();
+
 }
 
 int main(void)
@@ -302,7 +334,7 @@ int main(void)
 
   // rtos :: OS_onStartup();
   ventiladorInit();
-  ventiladorSetDutyCycle(80.00);
+  ventiladorSetDutyCycle(60.00);
 
   VL53L0X_InitSimple();
 
