@@ -38,3 +38,7 @@ build
 **/.directory
 /Debug/
 /Release/
+.vscode/c_cpp_properties.json
+.gitignore
+.vscode/settings.json
+.vscode/launch.json
