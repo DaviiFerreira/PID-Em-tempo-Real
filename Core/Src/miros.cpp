@@ -69,6 +69,8 @@ uint8_t OS_currIdx; /* current thread index for the circular array */
 bool AperiodicServerStarted = false;
 
 rtos :: MySemaphore preemptionAllowed;
+
+
 void desativarPreempcao(){
 	preemptionAllowed.tryLock();
 }
@@ -210,12 +212,9 @@ void checkDeadline(uint8_t n){
 
 						//marca tarefa como pronta
 						OS_readySet |= (1U <<  (pt->myThreadIndex - 1U));
-						if(TempoAtual==TempoCiclo){
-							pt->lastAtivation = TempoAtual;
-						}
-						else{
+
 							 pt->lastAtivation = TempoAtual;
-						}
+
 					}
 				}
 			}
@@ -238,42 +237,12 @@ void checkDeadline(uint8_t n){
 				}
 			}
 }
-/*
 
-uint8_t D = 0;
-void inTd(){
-D=1;
-}
-void taskD(){
-inTd();
-D=3;
-}
-uint8_t E = 0;
-void inTe(){
-E=1;
-}
-void taskE(){
-inTe();
-E=3;
-}
-OSAperiodicTask e;
-OSAperiodicTask d;
-uint8_t ABC = 0;
-*/
 void OS_tick(void) {
 	uint8_t n = 0;
 	TempoAtual++;
 	if(TempoAtual>TempoCiclo){
 		TempoAtual = 0;
-		/*OSAperiodicTask_start(&d, &taskD);
-		if (ABC == 1 ){
-			OSAperiodicTask_start(&e, &taskE);
-			ABC = 0;
-		}
-		else{
-			ABC++;
-		}*/
-
 	}
 	for(n=1U;n<OS_threadNum; n++){ 				/* cycle through every thread but the idle */
 		if(OS_thread[n]->timeout != 0U){
@@ -471,6 +440,15 @@ __asm volatile (
     "  LDR           r1,[r1,#0x00]     \n"
     "  CBZ           r1,PendSV_restore \n"
 
+	     // Salva FPU (se usada)
+	        "  MRS    r0, CONTROL           \n"
+	        "  TST    r0, #0x10             \n" // Bit FPCA
+	        "  BEQ    save_no_fpu          \n"
+	        "  SUB    sp, sp, #(17*4)      \n" // Reserva espaço: 16 S regs + FPSCR
+	        "  VSTMDB sp!, {s16-s31}       \n" // Salva s16-s31
+	        "  VMRS   r1, FPSCR            \n"
+	        "  STR    r1, [sp, #(16*4)]    \n"
+	        "save_no_fpu:                  \n"
     /*     push registers r4-r11 on the stack */
     "  PUSH          {r4-r11}          \n"
 
@@ -494,6 +472,15 @@ __asm volatile (
 
     /* pop registers r4-r11 */
     "  POP           {r4-r11}          \n"
+
+		  // Restaura FPU (se usada)
+		        "  MRS    r0, CONTROL          \n"
+		        "  TST    r0, #0x10            \n"
+		        "  BEQ    restore_no_fpu      \n"
+		        "  VLDMIA sp!, {s16-s31}      \n"
+		        "  LDR    r1, [sp], #(16*4)   \n"
+		        "  VMSR   FPSCR, r1           \n"
+		        "restore_no_fpu:              \n"
 
     /* __enable_irq(); */
     "  CPSIE         I                 \n"
