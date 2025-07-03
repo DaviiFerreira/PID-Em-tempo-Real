@@ -27,14 +27,12 @@ extern "C" {
 #include "stm32g4xx_hal.h"  // Biblioteca da HAL para STM32G4
 #include "stm32g4xx_hal_rng.h"  // Biblioteca específica do RNG
 }
-//#include "sensor.h"
+
 #include "stm32g4xx_hal_conf.h"
 #include "ventilador.h"
-/*teste botao*/
 
 
 I2C_HandleTypeDef hi2c1;
-//I2C_HandleTypeDef hi2c2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
@@ -67,7 +65,6 @@ void avG_Init() {
 
 
 double ultimoErro = 0;
-
 double erroIntegral=0;
 double testePid(double medida, double setpoint) {
     double erro =   setpoint - medida;
@@ -89,9 +86,7 @@ double testePid(double medida, double setpoint) {
 }
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
+ __disable_irq();
   while (1)
   {
   }
@@ -133,7 +128,10 @@ HAL_StatusTypeDef VL53L0X_ReadSingleSimple(uint16_t *distance) {
     // 3) Ler distância: 0x1E + 0x1F,,
     ret = HAL_I2C_Mem_Read(&hi2c1, VL53L0X_ADDR, 0x1E, I2C_MEMADD_SIZE_8BIT, rangeData, 2, 100);
 
+
+    //semafora pra distance
     *distance = (rangeData[0] << 8) | rangeData[1];
+
     return ret;
 }
 
@@ -171,14 +169,6 @@ static void MX_GPIO_Init(void)
 }
 static void MX_I2C1_Init(void)
 {
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
     __HAL_RCC_I2C1_CLK_ENABLE();
 
   hi2c1.Instance = I2C1;
@@ -251,7 +241,7 @@ void SystemClock_Config(void)
 
 uint16_t setpointGlobal = 0;
 double resultPid;
-    uint16_t distance = 0;
+uint16_t distance = 0;
 void consume()
 	{
 E=7;
@@ -263,8 +253,7 @@ void produce()
 	{
 E = 6;
 	//ventiladorSetDutyCycle(resultPid);
-	// Usa o valor da distância
-	// Ex: enviar por UART, acionar algo, etc.
+
 
 }
 void produceA()
@@ -273,58 +262,45 @@ void produceA()
     uint16_t medida = distance - 50; // 50 correção leitura do sensor
 	double erro =   setpointGlobal - medida;
 
-	    double proporcional = -0.0001 * erro;
-	    erroIntegral += erro * 0.050;
-	    double integral = -0.00001 * erroIntegral;
-	    double derivativo = -0.00001 * (erro - ultimoErro) / 0.050;
+	double proporcional = -0.0001 * erro;
+	erroIntegral += erro * 0.050;
+	double integral = -0.00001 * erroIntegral;
+	double derivativo = -0.00001 * (erro - ultimoErro) / 0.050;
 
-	    ultimoErro = erro;
-	    if( proporcional + integral + derivativo<-0.3){
-	    	resultPid = -30;
-	    return;
-	    }
-	    if( proporcional + integral + derivativo>0.3){
-	    	resultPid =30;
-	    	return;
-	    }
+	ultimoErro = erro;
+	if( proporcional + integral + derivativo<-0.3){
+		resultPid = -30;
+	return;
+	}
+	if( proporcional + integral + derivativo>0.3){
+		resultPid =30;
+		return;
+	}
 
-	    resultPid = (proporcional + integral + derivativo)*100;
-	//resultPid = testePid(distance-50,setpointGlobal)+61;
+	resultPid = (proporcional + integral + derivativo)*100;
 
 }
 
-
-/*	if (status == HAL_OK) {
-						E=5;
-						ventiladorSetDutyCycle(testePid(distance-50,setpointGlobal)+61 );
-						HAL_Delay(50);
-						// Usa o valor da distância
-						// Ex: enviar por UART, acionar algo, etc.
-					} else {
-						E=6;
-						// Tratar erro
+void taskD(){
 
 
-	  }
- *
- *
- *
- *
- *
- *
- *
- * */
+	if (setpointGlobal == 200) {
+		setpointGlobal = 300;
+	}
+	else {
+		setpointGlobal = 200;
+	}
+}
 
 
-
-
+rtos :: OSAperiodicTask d;
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-	setpointGlobal = 200;
+	  if (GPIO_Pin == GPIO_PIN_13)
+	  {
+		  rtos :: OSAperiodicTask_start(&d, &taskD);
+	  }
 }
-
-#define VL53L0X_TIMEOUT_MS   1000
-
 
 uint32_t stack_idleThread[40];
 uint32_t stack_ConsumerThread[128];
@@ -334,6 +310,8 @@ uint32_t stack_ProducerAThread[400];
 rtos :: OSPeriodicTask threadConsumer;
 rtos :: OSPeriodicTask threadProducer;
 rtos :: OSPeriodicTask threadProducerA;
+
+
 #include "core_cm4.h"   // traz as definições de SCB e FPU
 
 int main(void)
@@ -368,24 +346,27 @@ int main(void)
 
 	// rtos :: OS_onStartup();
 	  ventiladorInit();
-	  ventiladorSetDutyCycle(80.00);
+	//  ventiladorSetDutyCycle(80.00);
 
- VL53L0X_InitSimple();
+	  VL53L0X_InitSimple();
 
 
 		  rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
 
+
+		  // ler sensor
 		  rtos::OSPeriodicTask_start(&threadConsumer,
 			                 &consume,
 							 stack_ConsumerThread, sizeof(stack_ConsumerThread),50u);
-
-		  rtos::OSPeriodicTask_start(&threadProducer,
-		                 &produce,
-						 stack_ProducerThread, sizeof(stack_ProducerThread),50u);
-
+		  // calcular
 		  rtos::OSPeriodicTask_start(&threadProducerA,
 		                 &produceA,
 						 stack_ProducerAThread, sizeof(stack_ProducerAThread),50u);
+		  // setar valor no ventilador
+		  rtos::OSPeriodicTask_start(&threadProducer,
+		                 &produce,
+						 stack_ProducerThread, sizeof(stack_ProducerThread),50u);
+		  rtos :: AperiodicServerStart();
 		  rtos::OS_run();
 }
 

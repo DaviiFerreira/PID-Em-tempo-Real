@@ -23,7 +23,7 @@ void ventiladorInit(void)
 }
 
 void ventiladorSetDutyCycle(float duty_cycle_percent)
-{
+{// fazer limitação
     uint32_t auto_reload = __HAL_TIM_GET_AUTORELOAD(&timer1_pwm_handle);
     uint32_t compare_value = (duty_cycle_percent / 100.0f) * auto_reload;
     __HAL_TIM_SET_COMPARE(&timer1_pwm_handle, TIM_CHANNEL_3, compare_value);
