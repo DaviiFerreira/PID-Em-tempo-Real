@@ -36,7 +36,7 @@ extern "C"
 /*teste botao*/
 
 rtos :: MySemaphore mutex;
-#define VL53L0X_ADDR (0x52) // 7-bit left-shifted
+#define VL53L0X_ADDR (0x52) //do datasheet
 
 I2C_HandleTypeDef hi2c1;
 
@@ -256,8 +256,8 @@ void CalculoPid()
 	 if(distance<20){
 		 medida = 20;
 	 }
-	 if(distance>1000){
-	 		 medida = 1000;
+	 if(distance>950){
+	 		 medida = 950;
 	 	 }
 	  double erro = setpointGlobal - medida;
 
@@ -302,10 +302,28 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	mutex.tryUnlock();
 
 }
+void buttonInit(){
+
+	  // Clock para PC13 (botão)
+	  __HAL_RCC_SYSCFG_CLK_ENABLE();
+
+	  // Inicialização do botão PC13 como EXTI
+	  GPIO_InitTypeDef GPIO_InitStruct = {0};
+	  GPIO_InitStruct.Pin = GPIO_PIN_13;
+	  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+	  GPIO_InitStruct.Pull = GPIO_NOPULL;
+	  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+	  // Habilita interrupção no NVIC
+	  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+	  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+}
+
 
 int main(void)
 {
   setpointGlobal = 300;
+
   SCB->CPACR |= (0xF << 20); // habilita acesso FPU
 
   // no começo do main(), logo após habilitar CPACR:
@@ -316,20 +334,7 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
 
-  // Clock para PC13 (botão)
-  __HAL_RCC_SYSCFG_CLK_ENABLE();
-
-  // Inicialização do botão PC13 como EXTI
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  // Habilita interrupção no NVIC
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
+  buttonInit();
   // avG_Init();
 
   // rtos :: OS_onStartup();

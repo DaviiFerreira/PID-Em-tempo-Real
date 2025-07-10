@@ -440,15 +440,15 @@ __asm volatile (
     "  LDR           r1,[r1,#0x00]     \n"
     "  CBZ           r1,PendSV_restore \n"
 
-	     // Salva FPU (se usada)
-	        "  MRS    r0, CONTROL           \n"
-	        "  TST    r0, #0x10             \n" // Bit FPCA
-	        "  BEQ    save_no_fpu          \n"
-	        "  SUB    sp, sp, #(17*4)      \n" // Reserva espaço: 16 S regs + FPSCR
-	        "  VSTMDB sp!, {s16-s31}       \n" // Salva s16-s31
-	        "  VMRS   r1, FPSCR            \n"
-	        "  STR    r1, [sp, #(16*4)]    \n"
-	        "save_no_fpu:                  \n"
+ // Salva FPU (se usada)
+	"  MRS    r0, CONTROL           \n"
+	"  TST    r0, #0x10             \n" // Bit FPCA
+	"  BEQ    save_no_fpu          \n"
+	"  SUB    sp, sp, #(17*4)      \n" // Reserva espaço: 16 S regs + FPSCR
+	"  VSTMDB sp!, {s16-s31}       \n" // Salva s16-s31
+	"  VMRS   r1, FPSCR            \n"
+	"  STR    r1, [sp, #(16*4)]    \n"
+	"save_no_fpu:                  \n"
     /*     push registers r4-r11 on the stack */
     "  PUSH          {r4-r11}          \n"
 
@@ -473,14 +473,14 @@ __asm volatile (
     /* pop registers r4-r11 */
     "  POP           {r4-r11}          \n"
 
-		  // Restaura FPU (se usada)
-		        "  MRS    r0, CONTROL          \n"
-		        "  TST    r0, #0x10            \n"
-		        "  BEQ    restore_no_fpu      \n"
-		        "  VLDMIA sp!, {s16-s31}      \n"
-		        "  LDR    r1, [sp], #(16*4)   \n"
-		        "  VMSR   FPSCR, r1           \n"
-		        "restore_no_fpu:              \n"
+  // Restaura FPU (se usada)
+		"  MRS    r0, CONTROL          \n"
+		"  TST    r0, #0x10            \n"
+		"  BEQ    restore_no_fpu      \n"
+		"  VLDMIA sp!, {s16-s31}      \n"
+		"  LDR    r1, [sp], #(16*4)   \n"
+		"  VMSR   FPSCR, r1           \n"
+		"restore_no_fpu:              \n"
 
     /* __enable_irq(); */
     "  CPSIE         I                 \n"
