@@ -26,13 +26,10 @@ O projeto foi realizado no ambiente de desenvolvimento **STM32CubeIDE**, utiliza
 ---
 ### Hardware
 
-1. Microcontrolador STM32G4.
-
-2. Sensor de distância VL53L0X, conectado via I2C.
-
-3. Ventilador Delta Electronics controlado por PWM.
-
-4. Tubo de acrílico vertical de 950mm que guia a bolinha de ping pong, permitindo que ela suba ou desça com o fluxo de ar.
+  - Microcontrolador STM32G4.
+  - Sensor de distância VL53L0X, conectado via I2C.
+  - Ventilador Delta Electronics controlado por PWM.
+  - Tubo de acrílico vertical de 950mm que guia a bolinha de ping pong, permitindo que ela suba ou desça com o fluxo de ar.
 
 ---
 ### Visão Geral Detalhada
@@ -62,11 +59,11 @@ O sistema é dividido em:
 
 ## Autoria e Créditos
 
-**Bruna Campos Santana**
-**Davi Ferrera**
-**Daniel Augusto Santana Porto**
-**Gabriel Andrea Carvalho**
-**Maria Eduarda Favero Razia**  
+- **Bruna Campos Santana**,
+- **Davi Ferrera**,
+- **Daniel Augusto Santana Porto**,
+- **Gabriel Andrea Carvalho**,
+- **Maria Eduarda Favero Razia**.
 Estudantes de Engenharia Mecatrônica – UFSC  
 
 Este projeto foi desenvolvido como parte de uma atividade acadêmica com base em códigos fornecidos pelo professor **Gian Ricardo Berkenbrock**, no contexto da disciplina de Sistemas de Tempo Real.
