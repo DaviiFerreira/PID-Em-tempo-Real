@@ -64,6 +64,7 @@ O sistema é dividido em:
 - **Daniel Augusto Santana Porto**,
 - **Gabriel Andrea Carvalho**,
 - **Maria Eduarda Favero Razia**.
+
 Estudantes de Engenharia Mecatrônica – UFSC  
 
 Este projeto foi desenvolvido como parte de uma atividade acadêmica com base em códigos fornecidos pelo professor **Gian Ricardo Berkenbrock**, no contexto da disciplina de Sistemas de Tempo Real.
