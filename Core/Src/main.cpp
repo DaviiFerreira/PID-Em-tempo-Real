@@ -230,7 +230,7 @@ void LerSensor()
 {
   //E = distance;
 	if(mutex.tryLock()){
-
+		//E = distance;
    VL53L0X_ReadSingleSimple( &distance);
 		mutex.tryUnlock();
 	}
@@ -288,18 +288,31 @@ void CalculoPid()
 
   // resultPid = testePid(distance-50,setpointGlobal)+61;
 }
+void taskD(){
+ 	while(!mutex.tryLock()){}
+	if (setpointGlobal == 300){
+			  setpointGlobal = 200;
+		}
+		else{
+			setpointGlobal = 300;
+		}
+	mutex.tryUnlock();
+}
 
+
+rtos :: OSAperiodicTask d;
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-	while(!mutex.tryLock()){}
+	//
+	 rtos :: OSAperiodicTask_start(&d, &taskD);
 
-	if (setpointGlobal == 300){
+/*	if (setpointGlobal == 300){
 		  setpointGlobal = 200;
 	}
 	else{
 		setpointGlobal = 300;
-	}
-	mutex.tryUnlock();
+	}*/
+	//mutex.tryUnlock();
 
 }
 void buttonInit(){
@@ -342,6 +355,7 @@ int main(void)
   ventiladorSetDutyCycle(60.00);
 
   VL53L0X_InitSimple();
+  rtos :: AperiodicServerStart();
 
   rtos::OS_init(stack_idleThread, sizeof(stack_idleThread));
 
@@ -356,5 +370,9 @@ int main(void)
   rtos::OSPeriodicTask_start(&threadSetaVelocidade,
                              &SetaVelocidade,
                              stack_SetaVelocidade, sizeof(stack_SetaVelocidade), 50u);
+
+
+
+
   rtos::OS_run();
 }
